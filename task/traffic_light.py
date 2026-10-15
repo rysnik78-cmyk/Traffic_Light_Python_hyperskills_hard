@@ -37,6 +37,7 @@ class TrafficManSys():
                     print('Bad command!\n')
                     continue
 
+
 if __name__ == "__main__":
 
     tms_session = TrafficManSys()
