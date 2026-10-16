@@ -1,12 +1,27 @@
 import os
+import sys
+import time
+from threading import Thread, Lock
+import subprocess
 
+l = Lock()
 
 class TrafficManSys():
+
+
     def __init__(self):
+
         self.welcome()
+        self.state = 'Not Started'
         self.number_of_roads = self.input_positive("Input the number of roads: ")
         self.interval = self.input_positive("Input the interval: ")
+        self.threads = Thread(target=self.stop_watch, name='QueueThread')
+        self.threads.start()
+        self.state = 'Menu'
         self.main_menu()
+
+
+
 
 
     def input_positive(self, communication = ''):
@@ -35,12 +50,12 @@ class TrafficManSys():
 
     def main_menu(self) -> None:
         while True:
-
             self.show_menu()
             command = input().strip()
             match command:
                 case "0":
                     print("Bye!")
+                    self.state = 'Bye'
                     break
                 case "1":
                     print("Road added")
@@ -53,15 +68,39 @@ class TrafficManSys():
                     os.system('cls' if os.name == 'nt' else 'clear')
                     continue
                 case "3":
-                    print("System opened")
+                    self.state = 'System'
                     input()
-                    os.system('cls' if os.name == 'nt' else 'clear')
+                    self.state = 'Menu'
                     continue
                 case _:
                     print('Incorrect option')
                     input()
                     os.system('cls' if os.name == 'nt' else 'clear')
                     continue
+
+    def stop_watch(self ):
+        start_time = time.time()
+        while True:
+            if self.state=='System':
+                subprocess.run("cls", shell=True)
+                os.system('cls' if os.name == 'nt' else 'clear')
+                passed = time.time() - start_time
+                print(f'! {round(passed)}s. have passed since system startup !')
+                print(f'! Number of roads: {self.number_of_roads} !')
+                print(f'! Interval: {self.interval} !')
+                print('! Press "Enter" to open menu !')
+                # print(self.state)
+                time.sleep(1)
+            if self.state == 'Bye':
+                break
+
+
+
+
+            # print('tick')
+            # print(self.state)
+            # if self.state == 'Menu':
+            #     break
 
 
 if __name__ == "__main__":
