@@ -1,36 +1,27 @@
+import math
 import os
-import sys
 import time
-from threading import Thread, Lock
+from threading import Thread
 import subprocess
 from collections import deque
 
-
-l = Lock()
-
 class TrafficManSys():
 
-
     def __init__(self):
-
+        self.threads = None
+        self.start_time = None
         self.welcome()
         self.state = 'Not Started'
-        self.number_of_roads = self.input_positive("Input the number of roads: ")
-        self.roads_queue = RoadsQueue(self.number_of_roads)
-        self.interval = self.input_positive("Input the interval: ")
+        number_of_roads = self.input_positive("Input the number of roads: ")
+        interval = self.input_positive("Input the interval: ")
         self.threads = Thread(target=self.stop_watch, name='QueueThread')
         self.threads.start()
-        self.state = 'Menu'
-
+        self.roads_queue = RoadsQueue(number_of_roads, interval)
         self.main_menu()
-
-
-
-
 
     def input_positive(self, communication = ''):
         print(communication, end='')
-        error_string = 'Error! Incorrect input. Try againg: '
+        error_string = 'Error! Incorrect input. Try again: '
         while True:
             try:
                 number = int(input())
@@ -68,11 +59,13 @@ class TrafficManSys():
                     os.system('cls' if os.name == 'nt' else 'clear')
                     continue
                 case "2":
-                    print(self.roads_queue.delete_road())
+                    print(self.roads_queue.delete_road(not self.state=='Not Started'))
                     input()
                     os.system('cls' if os.name == 'nt' else 'clear')
                     continue
                 case "3":
+                    if self.state == 'Not Started':
+                        self.start_time = time.perf_counter()
                     self.state = 'System'
                     input()
                     self.state = 'Menu'
@@ -84,16 +77,15 @@ class TrafficManSys():
                     continue
 
     def stop_watch(self ):
-        start_time = time.time()
         while True:
             if self.state=='System':
                 subprocess.run("cls", shell=True)
                 os.system('cls' if os.name == 'nt' else 'clear')
-                passed = time.time() - start_time
-                print(f'! {round(passed)}s. have passed since system startup !')
-                print(f'! Number of roads: {self.number_of_roads} !')
-                print(f'! Interval: {self.interval} !\n')
-                print(self.roads_queue.list_of_roads())
+                passed = time.perf_counter() - self.start_time
+                print(f'! {int(passed)}s. have passed since system startup !')
+                print(f'! Number of roads: {self.roads_queue.max_queue_size} !')
+                print(f'! Interval: {self.roads_queue.interval} !')
+                print(self.roads_queue.list_of_roads(passed))
                 print('! Press "Enter" to open menu !')
                 # print(self.state)
                 time.sleep(1)
@@ -101,44 +93,64 @@ class TrafficManSys():
                 break
 
 class RoadsQueue:
-    def __init__(self, number_of_roads):
-        self.queue_size = number_of_roads
-        self.traffic_deque = deque(maxlen=self.queue_size)
+    def __init__(self, number_of_roads, interval):
+        self.max_queue_size = number_of_roads
+        self.traffic_deque = deque(maxlen=self.max_queue_size)
         self.queue_elements_count = 0
+        self.interval = interval
+        self.cycle_beginning_time = 0
+        self.total_cycle_time = 0
         # self.road_name_list = []
 
+    def road_status(self, street_number, current_time_from_cycle_beginning):
+
+        if (street_number * self.interval) > current_time_from_cycle_beginning >= (street_number - 1) * self.interval:
+            opened = 'open'
+            seconds_to = math.ceil((street_number * self.interval) - current_time_from_cycle_beginning)
+        else:
+            opened = 'closed'
+            delta = ((street_number - 1) * self.interval) - current_time_from_cycle_beginning
+            if delta > 0:
+                seconds_to = math.ceil(delta)
+            else:
+                seconds_to = math.ceil(self.total_cycle_time - current_time_from_cycle_beginning + (street_number - 1) * self.interval)
+
+        return f'{opened} for {seconds_to}s.'
+
     def add_road(self, road):
-        if self.queue_elements_count == self.queue_size:
+        if self.queue_elements_count == self.max_queue_size:
             return 'Queue is full'
         else:
             self.traffic_deque.append(road)
             self.queue_elements_count += 1
-        return f'{road} added'
+            self.total_cycle_time = self.interval * self.queue_elements_count
+            return f'{road} added'
 
-
-    def delete_road(self):
+    def delete_road(self, system_started):
         if self.queue_elements_count > 0:
             self.queue_elements_count -= 1
+            self.total_cycle_time = self.interval * self.queue_elements_count
+            if system_started:
+                self.cycle_beginning_time += self.interval
             return f'{self.traffic_deque.popleft()} deleted!'
         else:
             return 'queue is empty'
 
-    def list_of_roads(self):
+    def list_of_roads(self, overall_current_time):
         if self.queue_elements_count == 0:
             return ''
         else:
             list_of_roads = ''
-            for i in range(self.queue_elements_count):
+            if overall_current_time - self.cycle_beginning_time >= self.total_cycle_time:
+                self.cycle_beginning_time += self.total_cycle_time
+            current_time_of_cycle = overall_current_time - self.cycle_beginning_time
+            for i in range(1, self.queue_elements_count + 1):
                 road = self.traffic_deque.popleft()
-                list_of_roads += f'{road}\n'
+                list_of_roads += f'Road "{road}" will be {self.road_status(i, current_time_of_cycle)}'
+                if i < self.queue_elements_count:
+                    list_of_roads += '\n'
                 self.traffic_deque.append(road)
             return list_of_roads
 
-
-
-
 if __name__ == "__main__":
-
     tms_session = TrafficManSys()
-
-
