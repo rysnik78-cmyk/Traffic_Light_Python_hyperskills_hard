@@ -3,6 +3,8 @@ import sys
 import time
 from threading import Thread, Lock
 import subprocess
+from collections import deque
+
 
 l = Lock()
 
@@ -14,10 +16,12 @@ class TrafficManSys():
         self.welcome()
         self.state = 'Not Started'
         self.number_of_roads = self.input_positive("Input the number of roads: ")
+        self.roads_queue = RoadsQueue(self.number_of_roads)
         self.interval = self.input_positive("Input the interval: ")
         self.threads = Thread(target=self.stop_watch, name='QueueThread')
         self.threads.start()
         self.state = 'Menu'
+
         self.main_menu()
 
 
@@ -58,12 +62,13 @@ class TrafficManSys():
                     self.state = 'Bye'
                     break
                 case "1":
-                    print("Road added")
+                    road_name = input("Input road name: ")
+                    print(self.roads_queue.add_road(road_name))
                     input()
                     os.system('cls' if os.name == 'nt' else 'clear')
                     continue
                 case "2":
-                    print("Road deleted")
+                    print(self.roads_queue.delete_road())
                     input()
                     os.system('cls' if os.name == 'nt' else 'clear')
                     continue
@@ -87,20 +92,49 @@ class TrafficManSys():
                 passed = time.time() - start_time
                 print(f'! {round(passed)}s. have passed since system startup !')
                 print(f'! Number of roads: {self.number_of_roads} !')
-                print(f'! Interval: {self.interval} !')
+                print(f'! Interval: {self.interval} !\n')
+                print(self.roads_queue.list_of_roads())
                 print('! Press "Enter" to open menu !')
                 # print(self.state)
                 time.sleep(1)
             if self.state == 'Bye':
                 break
 
+class RoadsQueue:
+    def __init__(self, number_of_roads):
+        self.queue_size = number_of_roads
+        self.traffic_deque = deque(maxlen=self.queue_size)
+        self.queue_elements_count = 0
+        # self.road_name_list = []
+
+    def add_road(self, road):
+        if self.queue_elements_count == self.queue_size:
+            return 'Queue is full'
+        else:
+            self.traffic_deque.append(road)
+            self.queue_elements_count += 1
+        return f'{road} added'
 
 
+    def delete_road(self):
+        if self.queue_elements_count > 0:
+            self.queue_elements_count -= 1
+            return f'{self.traffic_deque.popleft()} deleted!'
+        else:
+            return 'queue is empty'
 
-            # print('tick')
-            # print(self.state)
-            # if self.state == 'Menu':
-            #     break
+    def list_of_roads(self):
+        if self.queue_elements_count == 0:
+            return ''
+        else:
+            list_of_roads = ''
+            for i in range(self.queue_elements_count):
+                road = self.traffic_deque.popleft()
+                list_of_roads += f'{road}\n'
+                self.traffic_deque.append(road)
+            return list_of_roads
+
+
 
 
 if __name__ == "__main__":
