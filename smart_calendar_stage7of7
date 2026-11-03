@@ -1,0 +1,376 @@
+import datetime
+import re
+import operator
+import os
+import json
+from enum import Enum
+
+class EVENT_CONSTANTS(Enum):
+        note = {'time input': 'Enter datetime in "YYYY-MM-DD HH:MM" format: ', 'time parser': '%Y-%m-%d %H:%M',
+                 'name input': 'Enter text: ', 'quantity input': 'How many notes would you like to add: ',
+                 're_pattern': r'\d\d\d\d-\d\d-\d\d \d\d:\d\d'}
+        birthday = {'time input': 'Enter date of birth in "YYYY-MM-DD" format: ', 'time parser': '%Y-%m-%d',
+                     'name input': 'Enter name: ',
+                     'quantity input': 'How many dates of birth would you like to add: ',
+                     're_pattern': r'\d\d\d\d-\d\d-\d\d'}
+
+class Calendar:
+    def __init__(self):
+        self.main_menu_string = 'Enter the command (add, view, delete, exit):'
+        self.added_event_counter = 0
+        self.path = os.getcwd() + '\\data.txt'
+        self.event_dict = {}
+        self.load_calendar()
+
+        if self.event_dict:
+            print(self.event_dict.keys())
+            self.added_event_counter = max(self.event_dict.keys())
+
+        # print(self.added_event_counter)
+        self.main()
+
+    def load_calendar(self):
+        # TODO: obsługa ładowania z pliku
+        # print('Loading calendar...')
+        if os.path.isfile(self.path):
+            # print('ok')
+            with open(self.path, 'r', encoding='utf-8') as save_file:
+                events_dict = json.load(save_file)
+            self.event_dict = {int(key): value for key, value in events_dict.items()}
+
+    def save_calendar(self) -> None:
+        # TODO: obsługa zapisu do pliku
+        with open(self.path, 'w', encoding='utf-8') as save_file:
+            json.dump(self.event_dict, save_file, indent=4, ensure_ascii=False)
+
+    def current_time(self):
+        output_string = 'Current date and time:\n'
+        output_string += datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        return output_string
+
+    def add_events(self, event_type):
+
+        event_type_info = {
+            'note': {'time input': 'Enter datetime in "YYYY-MM-DD HH:MM" format: ', 'time parser': '%Y-%m-%d %H:%M',
+                     'name input': 'Enter text: ', 'quantity input': 'How many notes would you like to add: ',
+                     're_pattern': r'\d\d\d\d-\d\d-\d\d \d\d:\d\d'},
+            'birthday': {'time input': 'Enter date of birth in "YYYY-MM-DD" format: ', 'time parser': '%Y-%m-%d',
+                         'name input': 'Enter name: ',
+                         'quantity input': 'How many dates of birth would you like to add: ',
+                         're_pattern': r'\d\d\d\d-\d\d-\d\d'}}
+
+        # quantity must be int > 0
+        while True:
+            try:
+                event_quantity = int(input(event_type_info[event_type]['quantity input']))
+            except ValueError:
+                print('Incorrect number')
+                continue
+            if event_quantity <= 0:
+                print('Incorrect number')
+                continue
+            break
+
+        # adding events
+        for i in range(event_quantity):
+            self.added_event_counter += 1
+            time_string = self.verified_time_string(event_type, str(i + 1) + '. ')
+            # time_object = self.verified_time_object(str(i + 1) + '. ' + event_type_info[event_type]['time input'], event_type_info[event_type]['re_pattern'], event_type_info[event_type]['time parser'])
+            name_string = input(event_type_info[event_type]['name input'])
+            # event_dict = {'type': event_type, 'name': name_string, 'date': time_object}
+            event_dict = {'type': event_type, 'name': name_string, 'date': time_string}
+            self.event_dict[self.added_event_counter] = event_dict
+        self.added_event_counter -= event_quantity
+
+        # printing events after adding them
+        for i in range(event_quantity):
+            self.added_event_counter += 1
+            event_item = self.event_dict[self.added_event_counter]
+            if event_type == 'note':
+                self.print_single_event(event_item)
+            elif event_type == 'birthday':
+                self.print_single_birthday(event_item)
+
+    def time_object_from_event(self, event):
+        time_parser = EVENT_CONSTANTS[event['type']].value['time parser']
+        return datetime.datetime.strptime(event['date'], time_parser)
+
+    # verifying the time input from the user;
+    # returns time_string verified according to the type o event
+    def verified_time_string(self, event_type, prefix = ''):
+        while True:
+            input_time_string = input(prefix + EVENT_CONSTANTS[event_type].value['time input'])
+            try:
+                time_object = datetime.datetime.strptime(input_time_string, EVENT_CONSTANTS[event_type].value['time parser'])
+            except ValueError:
+                print('Incorrect date or time values')
+                continue
+            if not re.match(EVENT_CONSTANTS[event_type].value['re_pattern'], input_time_string):
+                print('Incorrect format')
+                continue
+            return input_time_string
+
+    # verifying the time input from the user; returns time object
+    def verified_time_object(self, input_text, re_pattern, time_pattern):
+        while True:
+            input_time_string = input(input_text)
+            try:
+                time_object = datetime.datetime.strptime(input_time_string, time_pattern)
+            except ValueError:
+                print('Incorrect date or time values')
+                continue
+            if not re.match(re_pattern, input_time_string):
+                print('Incorrect format')
+                continue
+            return time_object
+
+    # returns tuple day, hour, minute
+    def time_left_to_event(self, event_item):
+        event_time = self.time_object_from_event(event_item)
+        delta = (event_time - datetime.datetime.now()).total_seconds()
+        days_left = delta // 86400
+        hours_left = delta % 86400 // 3600
+        minutes_left = delta % 86400 % 3600 // 60 + 1
+        if minutes_left == 60:
+            hours_left += 1
+            minutes_left = 0
+        if hours_left == 24:
+            days_left += 1
+            hours_left = 0
+        return days_left, hours_left, minutes_left, delta
+
+
+    # counts time left to the birthday next from now
+    # returns ready string like this: "Birthday: "Eli Turner (turns 66)" - 308 day(s)"
+    def time_left_to_first_available_birthday(self, event_item):
+        # counts when is the next birthdays from the reference point in the function defined below
+        event_date = self.time_object_from_event(event_item)
+        next_birthday = datetime.datetime(datetime.datetime.now().year, event_date.month, event_date.day)
+        if datetime.datetime.now().date() >= next_birthday.date():
+            next_birthday = datetime.datetime(datetime.datetime.now().year + 1, event_date.month, event_date.day)
+        # counting the year turns at next birthday
+        year_turns = next_birthday.year - event_date.year
+        # counting days to the next birthday
+        delta_to_birthday = (next_birthday - datetime.datetime.now()).total_seconds()
+        days_left = delta_to_birthday // 86400 + 1  # it could be +1 maybe depends on tests
+        return year_turns, days_left, delta_to_birthday, next_birthday
+
+    def print_sorted_events(self, descending= False):
+        dict_with_time_left = {}
+        for event_key in self.event_dict.keys():
+            if self.event_dict[event_key]['type'] == 'birthday':
+                dict_with_time_left[event_key] = {'datetime': self.time_left_to_first_available_birthday(self.event_dict[event_key])[3] ,'days_left': self.time_left_to_first_available_birthday(self.event_dict[event_key])[1], 'delta': self.time_left_to_first_available_birthday(self.event_dict[event_key])[2], 'text': self.event_dict[event_key]['name']}
+            elif self.event_dict[event_key]['type'] == 'note':
+                dict_with_time_left[event_key] = {'datetime': self.time_object_from_event(self.event_dict[event_key]), 'days_left': self.time_left_to_event(self.event_dict[event_key])[0], 'delta': self.time_left_to_event(self.event_dict[event_key])[3], 'text': self.event_dict[event_key]['name']}
+
+        # print(dict_with_time_left)
+        # print(type(dict_with_time_left))
+        # print(type(dict_with_time_left[1]))
+
+        # if descending:
+        #     # print('desc')
+        #     dict_with_time_left_sorted = dict(sorted(dict_with_time_left.items(), key=lambda x: (-x[1]['datetime'].timestamp(), x[1]['text'])))
+        # else:
+        #     dict_with_time_left_sorted = dict(sorted(dict_with_time_left.items(), key=lambda x: (x[1]['datetime'].timestamp(), x[1]['text'])))
+
+
+        if descending:
+            print('desc')
+            dict_with_time_left_sorted = dict(sorted(dict_with_time_left.items(), key=lambda x: (int(x[1]['delta']), x[1]['text']), reverse=True ))
+        else:
+            dict_with_time_left_sorted = dict(sorted(dict_with_time_left.items(), key=lambda x: (int(x[1]['delta']), x[1]['text'])))
+
+        # dict_with_time_left_sorted = dict(sorted(dict_with_time_left.items(), key=lambda x: (int(x[1]['delta']), x[1]['text']), reverse=descending))
+        # dict_with_time_left_sorted = dict(sorted(dict_with_time_left.items(), key=lambda x: (int(x[1]['days_left']), x[1]['text']), reverse=descending))
+        # print(dict_with_time_left_sorted)
+
+        for key in dict_with_time_left_sorted:
+            # print(key)
+            # print(dict_with_time_left_sorted[key])
+            # print(dict_with_time_left_sorted[key]['datetime'])
+            if self.event_dict[key]['type'] == 'birthday':
+                self.print_single_birthday(self.event_dict[key])
+            elif self.event_dict[key]['type'] == 'note':
+                self.print_single_event(self.event_dict[key])
+
+    # TODO zamienić odczyt z obiketu na odczyt ze string/
+    def print_single_birthday(self, event_item, event_time_object = None, event_text = None, prefix_string=None):
+        next_birthday_tuple = self.time_left_to_first_available_birthday(event_item)
+        birthdays_event_string = f'Birthday: "{event_item['name']} (turns {next_birthday_tuple[0]})" - {next_birthday_tuple[1]:.0f} day(s)'
+        if not event_time_object and not event_text:
+            # printed_events_counter += 1
+            if prefix_string:
+                prefix = prefix_string
+            else:
+                prefix = ''
+            print(prefix + birthdays_event_string)
+            # printed_event_key_list.append(str(event[0]))
+
+        # input date points exactly one of birthdays
+        elif event_time_object:
+            event_time = self.time_object_from_event(event_item).date()
+            if event_time == datetime.datetime(event_time.year, event_time_object.month, event_time_object.day).date():
+                print(birthdays_event_string)  # event_time_object is user input which turned to be one of the birthdays
+
+        # text_in_event_text
+        elif event_text and re.search(event_text.lower(), event_item['name'].lower()):
+            print(birthdays_event_string)
+
+    # TODO zamienić odczyt z obiketu na odczyt ze string/
+    def print_single_event(self, event_item, event_time_object = None, event_text = None, prefix_string=None):
+        time_to_event_tuple = self.time_left_to_event(event_item)
+        event_string = f'Note: "{event_item['name']}" Remains: {time_to_event_tuple[0]:.0f} day(s), {time_to_event_tuple[1]:.0f} hour(s), {time_to_event_tuple[2]:.0f} minute(s)'
+        if not event_time_object and not event_text:
+
+            if prefix_string:
+                prefix = prefix_string
+            else:
+                prefix = ''
+            print(prefix + event_string)
+
+        # input event_date_is_exactly date of event in the base
+        elif event_time_object and self.time_object_from_event(event_item).date() == event_time_object.date():
+            print(event_string)
+
+        # text_in_event_text
+        elif event_text and re.search(event_text.lower(), event_item['name'].lower()):
+            print(event_string)
+
+    # TODO zamienić odczyt z obiketu na odczyt ze string/
+
+    # prints events from the event dictionary which fulfill the parameters
+    def print_events(self, event_type = 'all', event_time_object = None, event_text = None, prefix_string=None):
+
+        # # if all events to be printed firstly prints birthdays and then notes
+        printed_events_counter = 0
+        printed_event_key_list = []
+        if event_type == 'birthdays' or event_type == 'all':
+            # print('B') # test line
+            for event_key in self.event_dict.keys():
+                if self.event_dict[event_key]['type'] == 'birthday':
+                    printed_events_counter += 1
+                    if prefix_string:
+                        prefix = str(printed_events_counter) + '. '
+                    else:
+                        prefix = None
+                    self.print_single_birthday(self.event_dict[event_key], event_time_object=event_time_object, event_text=event_text, prefix_string=prefix)
+                    printed_event_key_list.append(event_key)
+                    continue
+        if event_type == 'notes' or event_type == 'all':
+            # print('N') # test line
+            for event_key in self.event_dict.keys():
+                if self.event_dict[event_key]['type'] == 'note':
+                    printed_events_counter += 1
+                    if prefix_string:
+                        prefix = str(printed_events_counter) + '. '
+                    else:
+                        prefix = None
+                    self.print_single_event(self.event_dict[event_key], event_time_object=event_time_object, event_text=event_text, prefix_string=prefix)
+                    printed_event_key_list.append(event_key)
+        return printed_event_key_list
+
+    def main(self):
+
+        while True: # C
+            print(self.current_time())
+            command = input(self.main_menu_string)
+            # print(command)
+            match command:
+                # adding events to the base
+                case 'add':
+                    while True:
+                        event_type = input('Specify type (note, birthday): ')
+                        if event_type not in ['note', 'birthday']:
+                            print('Incorrect type')
+                            continue
+                        else:
+                            break
+                    self.add_events(event_type)
+                    self.save_calendar()
+                    continue
+
+                # viewing the events from base
+                case 'view':
+                    while True: # B
+                        view_type = input("Specify filter (all, date, text, birthdays, notes, sorted): ")
+                        match view_type:
+                            case 'all':
+                                # to do
+                                self.print_events(event_type = 'all')
+                                break # B
+                            case 'date':
+                                searched_time_object = self.verified_time_object('Enter date in "YYYY-MM-DD" format: ',r'\d\d\d\d-\d\d-\d\d','%Y-%m-%d')
+                                self.print_events(event_time_object=searched_time_object)
+                                break # B
+                            case 'text':
+                                input_text = input('Enter text: ')
+                                self.print_events(event_text = input_text)
+                                break # B
+                            case 'birthdays':
+                                self.print_events(event_type='birthdays')
+                                break # B
+                            case 'notes':
+                                self.print_events(event_type='notes')
+                                break # B
+                            case 'sorted':
+                                while True: # A
+                                    way = input('Specify way (ascending, descending): ')
+                                    if way == 'ascending':
+                                        self.print_sorted_events(descending= False)
+                                        break
+                                    elif way == 'descending':
+                                        self.print_sorted_events(descending= True)
+                                        break # A
+                                    else:
+                                        print('Incorrect way type')
+                                        continue # A
+                                break # B
+                            case _:
+                                print('Incorrect type')
+                                continue # B
+                    continue # C
+
+                # deleting events from base
+                case 'delete':
+                    list_of_printed_event_keys = self.print_events(event_type='all', prefix_string = True)
+
+                    while True:
+                        events_to_delete_string = input('Enter ids:')
+                        events_to_delete_list = events_to_delete_string.split(',')
+                        set_to_delete = set(events_to_delete_list)
+                        if not self.event_dict:
+                            break
+
+                        # print(set_to_delete)
+                        set_of_event_keys = set(list_of_printed_event_keys)
+
+                        # verifying if all the numbers are present on the list
+                        if set_to_delete.issubset(set_of_event_keys):
+                            break
+                        else:
+                            print('Incorrect ids')
+                            break
+                    if self.event_dict:
+                        for element in set_to_delete:
+                            # print(int(element))
+                            if list_of_printed_event_keys:
+                                print(list_of_printed_event_keys)
+                                # print(list_of_printed_event_keys[int(element) - 1])
+                                # print(list_of_printed_event_keys[int(element) - 1])
+                                # print(self.event_dict[int(list_of_printed_event_keys[int(element) - 1])])
+
+                            self.event_dict.pop(int(list_of_printed_event_keys[int(element) - 1]))
+                        self.save_calendar()
+
+                    continue
+                case 'exit':
+                    self.save_calendar()
+                    print('Goodbye')
+                    # print(self.event_dict.keys())
+                    break
+                case _:
+                    print('Incorrect command')
+                    continue
+
+if __name__ == '__main__':
+    my_calendar = Calendar()
